@@ -1,24 +1,57 @@
-# habit-tracker-assessment
-import { useState } from 'react';
+export interface Habit {
+  id: string;
+  name: string;
+}
 
-export function CheckCell({ checked, onToggle, disabled, isToday }) {
+// Assuming your checkmarks are a Record or Array. Adjust accordingly.
+export type Checkmarks = Record<string, string[]>;
+
+
+import React, { useState } from 'react';
+
+export interface CheckCellProps {
+  checked: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+  isToday: boolean;
+}
+
+/**
+ * A toggleable cell representing a habit's completion status for a specific day.
+ */
+export const CheckCell: React.FC<CheckCellProps> = React.memo(({ 
+  checked, 
+  onToggle, 
+  disabled, 
+  isToday 
+}) => {
   const [animating, setAnimating] = useState(false);
 
-  function handleClick() {
+  const handleClick = () => {
     if (disabled) return;
     if (!checked) {
       setAnimating(true);
       setTimeout(() => setAnimating(false), 300);
     }
     onToggle();
-  }
+  };
 
-  function handleKeyDown(e) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       handleClick();
     }
-  }
+  };
+
+  const baseClasses = "relative w-8 h-8 rounded-lg border-2 transition-all duration-200 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss focus-visible:ring-offset-1";
+  
+  const stateClasses = disabled
+    ? "border-cream-200 bg-cream-50 cursor-not-allowed opacity-40"
+    : checked
+      ? "border-moss bg-moss shadow-check cursor-pointer hover:bg-moss-dark hover:border-moss-dark"
+      : isToday
+        ? "border-moss/40 bg-cream-50 cursor-pointer hover:border-moss hover:bg-moss/10"
+        : "border-ink/10 bg-cream-50 cursor-pointer hover:border-moss/50 hover:bg-cream-100";
 
   return (
     <div className="flex items-center justify-center">
@@ -29,17 +62,7 @@ export function CheckCell({ checked, onToggle, disabled, isToday }) {
         aria-label={checked ? 'Mark incomplete' : 'Mark complete'}
         aria-checked={checked}
         role="checkbox"
-        className={[
-          'relative w-8 h-8 rounded-lg border-2 transition-all duration-200 flex items-center justify-center',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss focus-visible:ring-offset-1',
-          disabled
-            ? 'border-cream-200 bg-cream-50 cursor-not-allowed opacity-40'
-            : checked
-            ? 'border-moss bg-moss shadow-check cursor-pointer hover:bg-moss-dark hover:border-moss-dark'
-            : isToday
-            ? 'border-moss/40 bg-cream-50 cursor-pointer hover:border-moss hover:bg-moss/10'
-            : 'border-ink/10 bg-cream-50 cursor-pointer hover:border-moss/50 hover:bg-cream-100',
-        ].join(' ')}
+        className={`${baseClasses} ${stateClasses}`}
       >
         {checked && (
           <svg
@@ -61,20 +84,48 @@ export function CheckCell({ checked, onToggle, disabled, isToday }) {
       </button>
     </div>
   );
-}
-import { useState, useRef, useEffect } from 'react';
-import { CheckCell } from './CheckCell';
-import { StreakBadge } from './StreakBadge';
-import { formatDateKey, isFutureDay, calculateStreak } from '../utils/dateUtils';
-import { format, isToday } from 'date-fns';
 
-export function HabitRow({ habit, weekDays, checkmarks, isChecked, onToggle, onRename, onDelete, index }) {
+  #HABIT ROW
+
+  import React, { useState, useRef, useEffect } from 'react';
+import { format, isToday } from 'date-fns';
+import { CheckCell } from './CheckCell';
+import { StreakBadge } from './StreakBadge'; // Assume this exists
+import { formatDateKey, isFutureDay, calculateStreak } from '../utils/dateUtils';
+import { Habit, Checkmarks } from '../types';
+
+export interface HabitRowProps {
+  habit: Habit;
+  weekDays: Date[];
+  checkmarks: Checkmarks;
+  isChecked: (habitId: string, dateKey: string) => boolean;
+  onToggle: (habitId: string, dateKey: string) => void;
+  onRename: (habitId: string, newName: string) => void;
+  onDelete: (habitId: string) => void;
+  index: number;
+}
+
+/**
+ * Displays a single habit row including its name, streak, and 7-day tracking grid.
+ */
+export const HabitRow: React.FC<HabitRowProps> = ({
+  habit,
+  weekDays,
+  checkmarks,
+  isChecked,
+  onToggle,
+  onRename,
+  onDelete,
+  index,
+}) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(habit.name);
   const [showMenu, setShowMenu] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const inputRef = useRef(null);
-  const menuRef = useRef(null);
+  
+  const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  
   const streak = calculateStreak(habit.id, checkmarks);
 
   useEffect(() => {
@@ -87,16 +138,17 @@ export function HabitRow({ habit, weekDays, checkmarks, isChecked, onToggle, onR
   // Close menu on outside click
   useEffect(() => {
     if (!showMenu) return;
-    function handleClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false);
       }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMenu]);
 
-  function commitRename() {
+  const commitRename = () => {
     const trimmed = editValue.trim();
     if (trimmed && trimmed !== habit.name) {
       onRename(habit.id, trimmed);
@@ -104,35 +156,31 @@ export function HabitRow({ habit, weekDays, checkmarks, isChecked, onToggle, onR
       setEditValue(habit.name);
     }
     setEditing(false);
-  }
+  };
 
-  function handleKeyDown(e) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') commitRename();
     if (e.key === 'Escape') {
       setEditValue(habit.name);
       setEditing(false);
     }
-  }
+  };
 
-  function handleDelete() {
+  const handleDelete = () => {
     setDeleting(true);
     setShowMenu(false);
     setTimeout(() => onDelete(habit.id), 280);
-  }
+  };
 
   return (
     <div
-      className={[
-        'group flex items-center gap-2 transition-all duration-300',
-        deleting ? 'opacity-0 -translate-x-4 scale-95' : 'opacity-100 translate-x-0',
-        'animate-slide-in',
-      ].join(' ')}
+      className={`group flex items-center gap-2 transition-all duration-300 animate-slide-in ${
+        deleting ? 'opacity-0 -translate-x-4 scale-95' : 'opacity-100 translate-x-0'
+      }`}
       style={{ animationDelay: `${index * 40}ms`, animationFillMode: 'both' }}
       role="row"
     >
-      {/* Habit name + controls */}
-      <div className="flex items-center gap-2 min-w-0 flex-1" style={{ minWidth: 0 }}>
-        {/* Color dot */}
+      <div className="flex items-center gap-2 min-w-0 flex-1">
         <div
           className="w-2 h-2 rounded-full flex-shrink-0 bg-moss opacity-60 group-hover:opacity-100 transition-opacity"
           aria-hidden="true"
@@ -162,12 +210,12 @@ export function HabitRow({ habit, weekDays, checkmarks, isChecked, onToggle, onR
         <StreakBadge streak={streak} />
       </div>
 
-      {/* Checkboxes */}
       <div className="flex items-center gap-1 flex-shrink-0" role="group" aria-label={`${habit.name} completions for the week`}>
         {weekDays.map((day) => {
           const key = formatDateKey(day);
           const future = isFutureDay(day);
           const today = isToday(day);
+          
           return (
             <CheckCell
               key={key}
@@ -175,25 +223,20 @@ export function HabitRow({ habit, weekDays, checkmarks, isChecked, onToggle, onR
               onToggle={() => onToggle(habit.id, key)}
               disabled={future}
               isToday={today}
-              aria-label={`${habit.name} on ${format(day, 'EEEE, MMM d')}`}
             />
           );
         })}
       </div>
 
-      {/* Actions menu */}
       <div className="relative flex-shrink-0" ref={menuRef}>
         <button
           onClick={() => setShowMenu((v) => !v)}
           aria-label={`Options for ${habit.name}`}
           aria-haspopup="true"
           aria-expanded={showMenu}
-          className={[
-            'w-7 h-7 rounded-md flex items-center justify-center text-ink-faint transition-all duration-150',
-            'hover:bg-cream-200 hover:text-ink focus-visible:bg-cream-200',
-            'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-            showMenu ? 'opacity-100 bg-cream-200 text-ink' : '',
-          ].join(' ')}
+          className={`w-7 h-7 rounded-md flex items-center justify-center transition-all duration-150 hover:bg-cream-200 hover:text-ink focus-visible:bg-cream-200 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 ${
+            showMenu ? 'opacity-100 bg-cream-200 text-ink' : 'text-ink-faint'
+          }`}
         >
           <svg viewBox="0 0 16 16" className="w-4 h-4" fill="currentColor" aria-hidden="true">
             <circle cx="8" cy="3" r="1.2" />
@@ -232,21 +275,25 @@ export function HabitRow({ habit, weekDays, checkmarks, isChecked, onToggle, onR
       </div>
     </div>
   );
-}
+};
+
+import React from 'react';
 import { format, isToday } from 'date-fns';
 import { isFutureDay } from '../utils/dateUtils';
 
-export function WeekHeader({ weekDays }) {
+export interface WeekHeaderProps {
+  weekDays: Date[];
+}
+
+export const WeekHeader: React.FC<WeekHeaderProps> = ({ weekDays }) => {
   return (
     <div className="flex items-center gap-2" role="row">
-      {/* Spacer to align with habit name column */}
       <div className="flex-1 min-w-0" aria-hidden="true" />
-
-      {/* Day columns */}
       <div className="flex items-center gap-1 flex-shrink-0">
         {weekDays.map((day) => {
           const today = isToday(day);
           const future = isFutureDay(day);
+          
           return (
             <div
               key={day.toISOString()}
@@ -254,26 +301,16 @@ export function WeekHeader({ weekDays }) {
               aria-label={format(day, 'EEEE, MMM d')}
             >
               <span
-                className={[
-                  'text-[10px] font-mono uppercase tracking-widest transition-colors',
-                  today
-                    ? 'text-moss font-semibold'
-                    : future
-                    ? 'text-ink-faint/50'
-                    : 'text-ink-faint',
-                ].join(' ')}
+                className={`text-[10px] font-mono uppercase tracking-widest transition-colors ${
+                  today ? 'text-moss font-semibold' : future ? 'text-ink-faint/50' : 'text-ink-faint'
+                }`}
               >
                 {format(day, 'EEE').slice(0, 2)}
               </span>
               <span
-                className={[
-                  'w-6 h-6 flex items-center justify-center rounded-full text-xs font-mono font-medium transition-all',
-                  today
-                    ? 'bg-moss text-white'
-                    : future
-                    ? 'text-ink-faint/50'
-                    : 'text-ink-soft',
-                ].join(' ')}
+                className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-mono font-medium transition-all ${
+                  today ? 'bg-moss text-white' : future ? 'text-ink-faint/50' : 'text-ink-soft'
+                }`}
               >
                 {format(day, 'd')}
               </span>
@@ -281,15 +318,31 @@ export function WeekHeader({ weekDays }) {
           );
         })}
       </div>
-
-      {/* Spacer to align with actions column */}
       <div className="w-7 flex-shrink-0" aria-hidden="true" />
     </div>
   );
-}
+};
+
+import React from 'react';
 import { getWeekLabel } from '../utils/dateUtils';
 
-export function WeekNavigation({ referenceDate, onPrev, onNext, onToday, onCurrentWeek, canGoNext }) {
+export interface WeekNavigationProps {
+  referenceDate: Date;
+  onPrev: () => void;
+  onNext: () => void;
+  onToday: () => void;
+  onCurrentWeek: boolean;
+  canGoNext: boolean;
+}
+
+export const WeekNavigation: React.FC<WeekNavigationProps> = ({ 
+  referenceDate, 
+  onPrev, 
+  onNext, 
+  onToday, 
+  onCurrentWeek, 
+  canGoNext 
+}) => {
   const label = getWeekLabel(referenceDate);
 
   return (
@@ -313,13 +366,11 @@ export function WeekNavigation({ referenceDate, onPrev, onNext, onToday, onCurre
           onClick={onNext}
           disabled={!canGoNext}
           aria-label="Next week"
-          className={[
-            'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150',
-            'focus-visible:ring-2 focus-visible:ring-moss focus-visible:ring-offset-1',
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 focus-visible:ring-2 focus-visible:ring-moss focus-visible:ring-offset-1 ${
             canGoNext
               ? 'text-ink-muted hover:bg-cream-200 hover:text-ink active:scale-95'
-              : 'text-ink-faint/30 cursor-not-allowed',
-          ].join(' ')}
+              : 'text-ink-faint/30 cursor-not-allowed'
+          }`}
         >
           <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="6 4 10 8 6 12" />
@@ -344,13 +395,19 @@ export function WeekNavigation({ referenceDate, onPrev, onNext, onToday, onCurre
       )}
     </div>
   );
+};
+
+import React from 'react';
+
+export interface EmptyStateProps {
+  onAddSample: (habitName: string) => void;
 }
-export function EmptyState({ onAddSample }) {
+
+export const EmptyState: React.FC<EmptyStateProps> = ({ onAddSample }) => {
   const suggestions = ['Exercise', 'Read 30 min', 'Drink water', 'Meditate'];
 
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 animate-fade-up text-center">
-      {/* Illustration */}
       <div className="relative mb-6">
         <div className="w-20 h-20 rounded-2xl bg-cream-200 flex items-center justify-center">
           <svg viewBox="0 0 48 48" className="w-10 h-10" fill="none" aria-hidden="true">
@@ -375,7 +432,6 @@ export function EmptyState({ onAddSample }) {
         Track daily habits with a weekly grid. Add your first habit and watch your streaks grow.
       </p>
 
-      {/* Suggestion chips */}
       <div className="flex flex-wrap gap-2 justify-center max-w-xs">
         {suggestions.map((s) => (
           <button
@@ -389,4 +445,9 @@ export function EmptyState({ onAddSample }) {
       </div>
     </div>
   );
-}
+};
+
+
+});
+
+CheckCell.displayName = 'CheckCell';
